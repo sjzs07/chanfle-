@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import VideoCard from "@/components/VideoCard";
 import { mockVideos } from "@/lib/mockData";
 
@@ -13,13 +13,45 @@ const categories = [
   { label: "🎬 Fails",    tags: ["fail", "fails"] },
 ];
 
+function normalizeDbVideo(v) {
+  return {
+    id: v.id,
+    title: v.title,
+    description: v.description || "",
+    thumbnailUrl: v.thumbnailUrl || `https://picsum.photos/seed/${v.id}/640/360`,
+    videoUrl: v.videoUrl,
+    duration: v.duration ? `0:${String(v.duration).padStart(2, "0")}` : "0:30",
+    views: v.views || 0,
+    likes: v.likes || 0,
+    tags: v.tags || [],
+    author: {
+      name: v.authorName || "Chanfle User",
+      avatarUrl: v.authorAvatar || `https://api.dicebear.com/9.x/avataaars/svg?seed=${v.id}`,
+    },
+    createdAt: v.createdAt || new Date().toISOString(),
+  };
+}
+
 export default function HomePage() {
   const [active, setActive] = useState(0);
+  const [dbVideos, setDbVideos] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/videos")
+      .then((r) => r.json())
+      .then((data) => setDbVideos((data.videos || []).map(normalizeDbVideo)))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Real uploaded videos first, then mock videos
+  const allVideos = [...dbVideos, ...mockVideos];
 
   const filtered =
     categories[active].tags.length === 0
-      ? mockVideos
-      : mockVideos.filter((v) =>
+      ? allVideos
+      : allVideos.filter((v) =>
           v.tags.some((t) => categories[active].tags.includes(t))
         );
 
@@ -42,16 +74,10 @@ export default function HomePage() {
             The internet&apos;s funniest corner. No algorithms. No drama. Just pure, unfiltered comedy gold.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <a
-              href="#feed"
-              className="rounded-full bg-[#ff3b5c] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#e0304f] transition-colors"
-            >
+            <a href="#feed" className="rounded-full bg-[#ff3b5c] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#e0304f] transition-colors">
               Start Laughing ▶
             </a>
-            <a
-              href="/upload"
-              className="rounded-full border border-[#2a2a3a] px-6 py-2.5 text-sm font-bold text-[#f0f0f5] hover:border-[#ff3b5c] transition-colors"
-            >
+            <a href="/upload" className="rounded-full border border-[#2a2a3a] px-6 py-2.5 text-sm font-bold text-[#f0f0f5] hover:border-[#ff3b5c] transition-colors">
               Upload a video
             </a>
           </div>
@@ -77,14 +103,29 @@ export default function HomePage() {
 
       {/* Section header */}
       <div id="feed" className="mb-6 flex items-center justify-between">
-        <h2 className="text-xl font-bold text-[#f0f0f5]">
-          {categories[active].label}
-        </h2>
-        <span className="text-sm text-[#6b6b80]">{filtered.length} video{filtered.length !== 1 ? "s" : ""}</span>
+        <h2 className="text-xl font-bold text-[#f0f0f5]">{categories[active].label}</h2>
+        <span className="text-sm text-[#6b6b80]">
+          {loading ? "Loading..." : `${filtered.length} video${filtered.length !== 1 ? "s" : ""}`}
+        </span>
       </div>
 
       {/* Video Grid */}
-      {filtered.length > 0 ? (
+      {loading ? (
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {[...Array(8)].map((_, i) => (
+            <div key={i} className="animate-pulse">
+              <div className="aspect-video rounded-xl bg-[#1a1a24]" />
+              <div className="mt-3 flex gap-3">
+                <div className="h-8 w-8 rounded-full bg-[#1a1a24]" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 rounded bg-[#1a1a24]" />
+                  <div className="h-3 w-2/3 rounded bg-[#1a1a24]" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : filtered.length > 0 ? (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((video) => (
             <VideoCard key={video.id} video={video} />
@@ -94,17 +135,14 @@ export default function HomePage() {
         <div className="flex flex-col items-center justify-center py-20 gap-4">
           <div className="text-6xl">😅</div>
           <p className="text-[#6b6b80]">No videos in this category yet. Be the first to upload one!</p>
-          <a
-            href="/upload"
-            className="rounded-full bg-[#ff3b5c] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#e0304f] transition-colors"
-          >
+          <a href="/upload" className="rounded-full bg-[#ff3b5c] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#e0304f] transition-colors">
             Upload a video
           </a>
         </div>
       )}
 
       {/* Load more */}
-      {filtered.length > 0 && (
+      {!loading && filtered.length > 0 && (
         <div className="mt-12 flex justify-center">
           <button className="rounded-full border border-[#2a2a3a] px-8 py-3 text-sm font-semibold text-[#6b6b80] hover:border-[#ff3b5c] hover:text-[#ff3b5c] transition-colors">
             Load more videos
@@ -120,10 +158,7 @@ export default function HomePage() {
           { label: "Creators", value: "3,200+", icon: "🎤" },
           { label: "Countries", value: "147", icon: "🌍" },
         ].map((stat) => (
-          <div
-            key={stat.label}
-            className="rounded-xl border border-[#2a2a3a] bg-[#1a1a24] p-5 text-center"
-          >
+          <div key={stat.label} className="rounded-xl border border-[#2a2a3a] bg-[#1a1a24] p-5 text-center">
             <div className="text-3xl mb-1">{stat.icon}</div>
             <div className="text-2xl font-black gradient-text">{stat.value}</div>
             <div className="text-xs text-[#6b6b80] mt-0.5">{stat.label}</div>
