@@ -59,7 +59,6 @@ export default function UploadPage() {
       cloudForm.append("signature", signature);
       cloudForm.append("api_key", apiKey);
       cloudForm.append("folder", "chanfle");
-      cloudForm.append("resource_type", "video");
 
       const cloudRes = await fetch(
         `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`,
