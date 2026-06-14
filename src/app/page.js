@@ -1,16 +1,34 @@
+"use client";
+
+import { useState } from "react";
 import VideoCard from "@/components/VideoCard";
 import { mockVideos } from "@/lib/mockData";
 
-const categories = ["🔥 Trending", "🐱 Animals", "👶 Babies", "😂 Pranks", "🤡 Dad Jokes", "🎬 Fails"];
+const categories = [
+  { label: "🔥 Trending", tags: [] },
+  { label: "🐱 Animals",  tags: ["animals", "cats", "dogs"] },
+  { label: "👶 Babies",   tags: ["baby", "cute"] },
+  { label: "😂 Pranks",   tags: ["pranks"] },
+  { label: "🤡 Dad Jokes",tags: ["dad-jokes", "puns"] },
+  { label: "🎬 Fails",    tags: ["fail", "fails"] },
+];
 
 export default function HomePage() {
+  const [active, setActive] = useState(0);
+
+  const filtered =
+    categories[active].tags.length === 0
+      ? mockVideos
+      : mockVideos.filter((v) =>
+          v.tags.some((t) => categories[active].tags.includes(t))
+        );
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
       {/* Hero Banner */}
       <div className="relative mb-10 overflow-hidden rounded-2xl bg-gradient-to-r from-[#1a0a0e] via-[#1a0e1a] to-[#0a0a1a] border border-[#2a2a3a] px-8 py-10">
         <div className="pointer-events-none absolute -top-10 -left-10 h-64 w-64 rounded-full bg-[#ff3b5c]/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-10 -right-10 h-64 w-64 rounded-full bg-[#ffd700]/10 blur-3xl" />
-
         <div className="relative">
           <div className="flex items-center gap-2 mb-3">
             <span className="rounded-full bg-[#ff3b5c]/20 px-3 py-1 text-xs font-bold text-[#ff3b5c] pulse-glow">
@@ -18,8 +36,7 @@ export default function HomePage() {
             </span>
           </div>
           <h1 className="text-4xl sm:text-5xl font-black leading-tight">
-            Welcome to{" "}
-            <span className="gradient-text">Chanfle</span>
+            Welcome to <span className="gradient-text">Chanfle</span>
           </h1>
           <p className="mt-3 max-w-lg text-[#6b6b80] text-base">
             The internet&apos;s funniest corner. No algorithms. No drama. Just pure, unfiltered comedy gold.
@@ -45,37 +62,55 @@ export default function HomePage() {
       <div className="mb-8 flex gap-2 overflow-x-auto pb-2">
         {categories.map((cat, i) => (
           <button
-            key={cat}
+            key={cat.label}
+            onClick={() => setActive(i)}
             className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-              i === 0
-                ? "bg-[#ff3b5c] text-white"
+              active === i
+                ? "bg-[#ff3b5c] text-white shadow-lg shadow-[#ff3b5c]/30"
                 : "border border-[#2a2a3a] bg-[#1a1a24] text-[#6b6b80] hover:border-[#ff3b5c] hover:text-[#f0f0f5]"
             }`}
           >
-            {cat}
+            {cat.label}
           </button>
         ))}
       </div>
 
       {/* Section header */}
       <div id="feed" className="mb-6 flex items-center justify-between">
-        <h2 className="text-xl font-bold text-[#f0f0f5]">🔥 Trending Now</h2>
-        <span className="text-sm text-[#6b6b80]">{mockVideos.length} videos</span>
+        <h2 className="text-xl font-bold text-[#f0f0f5]">
+          {categories[active].label}
+        </h2>
+        <span className="text-sm text-[#6b6b80]">{filtered.length} video{filtered.length !== 1 ? "s" : ""}</span>
       </div>
 
       {/* Video Grid */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {mockVideos.map((video) => (
-          <VideoCard key={video.id} video={video} />
-        ))}
-      </div>
+      {filtered.length > 0 ? (
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filtered.map((video) => (
+            <VideoCard key={video.id} video={video} />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <div className="text-6xl">😅</div>
+          <p className="text-[#6b6b80]">No videos in this category yet. Be the first to upload one!</p>
+          <a
+            href="/upload"
+            className="rounded-full bg-[#ff3b5c] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#e0304f] transition-colors"
+          >
+            Upload a video
+          </a>
+        </div>
+      )}
 
       {/* Load more */}
-      <div className="mt-12 flex justify-center">
-        <button className="rounded-full border border-[#2a2a3a] px-8 py-3 text-sm font-semibold text-[#6b6b80] hover:border-[#ff3b5c] hover:text-[#ff3b5c] transition-colors">
-          Load more videos
-        </button>
-      </div>
+      {filtered.length > 0 && (
+        <div className="mt-12 flex justify-center">
+          <button className="rounded-full border border-[#2a2a3a] px-8 py-3 text-sm font-semibold text-[#6b6b80] hover:border-[#ff3b5c] hover:text-[#ff3b5c] transition-colors">
+            Load more videos
+          </button>
+        </div>
+      )}
 
       {/* Stats strip */}
       <div className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-4">
