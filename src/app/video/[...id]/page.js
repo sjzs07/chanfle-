@@ -25,25 +25,27 @@ function normalizeDbVideo(v) {
 }
 
 export default function VideoPage({ params }) {
-  const { id } = use(params);
+  // Catch-all: params.id is an array e.g. ['chanfle', 'abc123'] or ['1']
+  const { id: segments } = use(params);
+  const fullId = Array.isArray(segments) ? segments.join("/") : segments;
+
   const { isSignedIn, user } = useUser();
 
-  const [video, setVideo] = useState(() => {
-    const mock = mockVideos.find((v) => v.id === id);
-    return mock || null;
-  });
-  const [loading, setLoading] = useState(!mockVideos.find((v) => v.id === id));
+  const mockVideo = mockVideos.find((v) => v.id === fullId);
+  const [video, setVideo] = useState(mockVideo || null);
+  const [loading, setLoading] = useState(!mockVideo);
   const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(0);
-  const [comments, setComments] = useState(mockComments.filter((c) => c.videoId === id));
+  const [likeCount, setLikeCount] = useState(mockVideo?.likes ?? 0);
+  const [comments, setComments] = useState(mockComments.filter((c) => c.videoId === fullId));
   const [commentText, setCommentText] = useState("");
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    // If it's a mock video, skip DB fetch
-    if (mockVideos.find((v) => v.id === id)) return;
+    if (mockVideo) return; // already loaded from mock data
 
-    fetch(`/api/videos/${encodeURIComponent(id)}`)
+    // Encode each segment individually so slashes become %2F in the query
+    const encodedId = segments.map(encodeURIComponent).join("/");
+    fetch(`/api/videos/${encodedId}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.video) {
@@ -54,11 +56,7 @@ export default function VideoPage({ params }) {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [id]);
-
-  useEffect(() => {
-    if (video) setLikeCount(video.likes);
-  }, [video]);
+  }, [fullId]);
 
   function handleLike() {
     if (!isSignedIn) return;
@@ -78,7 +76,7 @@ export default function VideoPage({ params }) {
     setComments((prev) => [
       {
         id: `c${Date.now()}`,
-        videoId: id,
+        videoId: fullId,
         author: user.fullName || user.username || "You",
         avatarUrl: user.imageUrl,
         text: commentText.trim(),
@@ -94,6 +92,7 @@ export default function VideoPage({ params }) {
       <div className="mx-auto max-w-7xl px-4 py-8">
         <div className="aspect-video w-full rounded-2xl bg-[#1a1a24] animate-pulse" />
         <div className="mt-4 h-6 w-2/3 rounded bg-[#1a1a24] animate-pulse" />
+        <div className="mt-2 h-4 w-1/3 rounded bg-[#1a1a24] animate-pulse" />
       </div>
     );
   }
@@ -115,15 +114,8 @@ export default function VideoPage({ params }) {
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Main column */}
         <div className="flex-1 min-w-0">
-          {/* Video Player */}
           <div className="aspect-video w-full overflow-hidden rounded-2xl bg-black">
-            <video
-              src={video.videoUrl}
-              controls
-              autoPlay
-              className="h-full w-full"
-              poster={video.thumbnailUrl}
-            />
+            <video src={video.videoUrl} controls autoPlay className="h-full w-full" poster={video.thumbnailUrl} />
           </div>
 
           <h1 className="mt-4 text-xl font-black leading-snug">{video.title}</h1>
@@ -139,20 +131,16 @@ export default function VideoPage({ params }) {
               <img src={video.author.avatarUrl} alt={video.author.name} className="h-9 w-9 rounded-full bg-[#2a2a3a]" />
               <span className="font-semibold text-sm">{video.author.name}</span>
             </div>
-
             <button
               onClick={handleLike}
               disabled={!isSignedIn}
               title={!isSignedIn ? "Log in to like" : ""}
               className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                liked
-                  ? "bg-[#ff3b5c] text-white"
-                  : "border border-[#2a2a3a] bg-[#1a1a24] text-[#6b6b80] hover:border-[#ff3b5c] disabled:opacity-50 disabled:cursor-not-allowed"
+                liked ? "bg-[#ff3b5c] text-white" : "border border-[#2a2a3a] bg-[#1a1a24] text-[#6b6b80] hover:border-[#ff3b5c] disabled:opacity-50 disabled:cursor-not-allowed"
               }`}
             >
               {liked ? "❤️" : "🤍"} {formatViews(likeCount)}
             </button>
-
             <button
               onClick={handleShare}
               className="flex items-center gap-1.5 rounded-full border border-[#2a2a3a] bg-[#1a1a24] px-4 py-2 text-sm font-semibold text-[#6b6b80] hover:border-[#ff3b5c] transition-colors"
@@ -162,13 +150,15 @@ export default function VideoPage({ params }) {
           </div>
 
           {/* Tags */}
-          <div className="mt-4 flex flex-wrap gap-2">
-            {video.tags.map((tag) => (
-              <Link key={tag} href={`/search?q=${tag}`} className="rounded-full border border-[#2a2a3a] bg-[#1a1a24] px-3 py-1 text-xs text-[#6b6b80] hover:border-[#ff3b5c] hover:text-[#ff3b5c] transition-colors">
-                #{tag}
-              </Link>
-            ))}
-          </div>
+          {video.tags.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {video.tags.map((tag) => (
+                <Link key={tag} href={`/search?q=${tag}`} className="rounded-full border border-[#2a2a3a] bg-[#1a1a24] px-3 py-1 text-xs text-[#6b6b80] hover:border-[#ff3b5c] hover:text-[#ff3b5c] transition-colors">
+                  #{tag}
+                </Link>
+              ))}
+            </div>
+          )}
 
           {/* Description */}
           {video.description && (
@@ -179,10 +169,7 @@ export default function VideoPage({ params }) {
 
           {/* Comments */}
           <div className="mt-8">
-            <h2 className="text-lg font-bold mb-4">
-              💬 {comments.length} Comment{comments.length !== 1 ? "s" : ""}
-            </h2>
-
+            <h2 className="text-lg font-bold mb-4">💬 {comments.length} Comment{comments.length !== 1 ? "s" : ""}</h2>
             {isSignedIn ? (
               <form onSubmit={handleComment} className="flex gap-3 mb-6">
                 <img src={user.imageUrl} alt="You" className="h-9 w-9 rounded-full shrink-0 bg-[#2a2a3a]" />
@@ -203,11 +190,8 @@ export default function VideoPage({ params }) {
                 <Link href="/sign-in" className="text-[#ff3b5c] hover:underline">Log in</Link> to leave a comment
               </div>
             )}
-
             <div className="flex flex-col gap-4">
-              {comments.length === 0 && (
-                <p className="text-sm text-[#6b6b80] text-center py-8">No comments yet. Be the first! 😂</p>
-              )}
+              {comments.length === 0 && <p className="text-sm text-[#6b6b80] text-center py-8">No comments yet. Be the first! 😂</p>}
               {comments.map((c) => (
                 <div key={c.id} className="flex gap-3">
                   <img src={c.avatarUrl} alt={c.author} className="h-8 w-8 rounded-full shrink-0 bg-[#2a2a3a]" />
