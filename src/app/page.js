@@ -117,9 +117,7 @@ export default function HomePage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
       {/* Hero Banner */}
-      <div className="relative mb-10 overflow-hidden rounded-2xl bg-gradient-to-r from-[#1a0a0e] via-[#1a0e1a] to-[#0a0a1a] border border-[#2a2a3a] px-8 py-10">
-        <div className="pointer-events-none absolute -top-10 -left-10 h-64 w-64 rounded-full bg-[#ff3b5c]/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-10 -right-10 h-64 w-64 rounded-full bg-[#ffd700]/10 blur-3xl" />
+      <div className="relative mb-10 px-2 py-10">
         <div className="relative">
           <div className="flex items-center gap-2 mb-3">
             <span className="rounded-full bg-[#ff3b5c]/20 px-3 py-1 text-xs font-bold text-[#ff3b5c] pulse-glow">
