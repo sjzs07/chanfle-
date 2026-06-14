@@ -4,6 +4,7 @@ import { useState, use, useEffect } from "react";
 import { mockVideos, mockComments, formatViews, timeAgo } from "@/lib/mockData";
 import { useUser } from "@clerk/nextjs";
 import Link from "next/link";
+import ShareModal from "@/components/ShareModal";
 
 function normalizeDbVideo(v) {
   return {
@@ -38,7 +39,7 @@ export default function VideoPage({ params }) {
   const [likeCount, setLikeCount] = useState(mockVideo?.likes ?? 0);
   const [comments, setComments] = useState(mockComments.filter((c) => c.videoId === fullId));
   const [commentText, setCommentText] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [showShare, setShowShare] = useState(false);
 
   useEffect(() => {
     if (mockVideo) return; // already loaded from mock data
@@ -64,10 +65,17 @@ export default function VideoPage({ params }) {
     setLikeCount((c) => (liked ? c - 1 : c + 1));
   }
 
-  function handleShare() {
-    navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  async function handleShare() {
+    const shareUrl = window.location.href;
+    // Use native share sheet on mobile if available
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: video?.title, text: `😂 ${video?.title} - via Chanfle`, url: shareUrl });
+        return;
+      } catch {}
+    }
+    // Fallback: open custom share modal
+    setShowShare(true);
   }
 
   function handleComment(e) {
@@ -111,6 +119,13 @@ export default function VideoPage({ params }) {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
+      {showShare && (
+        <ShareModal
+          url={typeof window !== "undefined" ? window.location.href : ""}
+          title={video.title}
+          onClose={() => setShowShare(false)}
+        />
+      )}
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Main column */}
         <div className="flex-1 min-w-0">
@@ -145,7 +160,7 @@ export default function VideoPage({ params }) {
               onClick={handleShare}
               className="flex items-center gap-1.5 rounded-full border border-[#2a2a3a] bg-[#1a1a24] px-4 py-2 text-sm font-semibold text-[#6b6b80] hover:border-[#ff3b5c] transition-colors"
             >
-              {copied ? "✅ Copied!" : "🔗 Share"}
+              🔗 Share
             </button>
           </div>
 
