@@ -21,12 +21,17 @@ export async function GET(req, { params }) {
   ]);
 
   let isFollowing = false;
+  let isMutualFollow = false;
+
   if (currentUserId && currentUserId !== targetUserId) {
-    const { rows } = await db.query(
-      "SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2",
+    const { rows: followRows } = await db.query(
+      `SELECT
+         EXISTS(SELECT 1 FROM follows WHERE follower_id=$1 AND following_id=$2) AS "iFollow",
+         EXISTS(SELECT 1 FROM follows WHERE follower_id=$2 AND following_id=$1) AS "theyFollow"`,
       [currentUserId, targetUserId]
     );
-    isFollowing = rows.length > 0;
+    isFollowing = followRows[0].iFollow;
+    isMutualFollow = followRows[0].iFollow && followRows[0].theyFollow;
   }
 
   return Response.json({
@@ -36,6 +41,7 @@ export async function GET(req, { params }) {
       followingCount: parseInt(followingRes.rows[0].count),
       videosCount: parseInt(videosRes.rows[0].count),
       isFollowing,
+      isMutualFollow,
       isOwnProfile: currentUserId === targetUserId,
     },
   });

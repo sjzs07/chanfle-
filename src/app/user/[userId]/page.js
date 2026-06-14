@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatViews, timeAgo } from "@/lib/mockData";
 
@@ -10,11 +11,9 @@ function normalizeVideo(v) {
     id: v.id,
     title: v.title,
     thumbnailUrl: v.thumbnailUrl || `https://picsum.photos/seed/${v.id}/640/360`,
-    videoUrl: v.videoUrl,
     duration: v.duration ? `0:${String(v.duration).padStart(2, "0")}` : "0:30",
     views: v.views || 0,
     likes: v.likes || 0,
-    tags: v.tags || [],
     createdAt: v.createdAt || new Date().toISOString(),
   };
 }
@@ -22,13 +21,16 @@ function normalizeVideo(v) {
 export default function UserProfilePage({ params }) {
   const { userId } = use(params);
   const { userId: currentUserId, isSignedIn } = useAuth();
+  const router = useRouter();
 
   const [profile, setProfile] = useState(null);
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [following, setFollowing] = useState(false);
+  const [isMutualFollow, setIsMutualFollow] = useState(false);
   const [followersCount, setFollowersCount] = useState(0);
   const [followLoading, setFollowLoading] = useState(false);
+  const [msgLoading, setMsgLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -39,6 +41,7 @@ export default function UserProfilePage({ params }) {
         if (userData.user) {
           setProfile(userData.user);
           setFollowing(userData.user.isFollowing);
+          setIsMutualFollow(userData.user.isMutualFollow);
           setFollowersCount(userData.user.followersCount);
         }
         setVideos((videosData.videos || []).map(normalizeVideo));
@@ -59,8 +62,28 @@ export default function UserProfilePage({ params }) {
       const data = await res.json();
       setFollowing(data.following);
       setFollowersCount(data.followersCount);
+      // Recalculate mutual follow after state changes
+      setIsMutualFollow(data.following && (profile?.isFollowing || false));
+      // Re-fetch to get accurate mutual follow status
+      const updated = await fetch(`/api/users/${userId}`).then((r) => r.json());
+      if (updated.user) setIsMutualFollow(updated.user.isMutualFollow);
     } catch {}
     setFollowLoading(false);
+  }
+
+  async function handleMessage() {
+    if (!isSignedIn || msgLoading) return;
+    setMsgLoading(true);
+    try {
+      const res = await fetch("/api/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId: userId }),
+      });
+      const data = await res.json();
+      if (data.conversationId) router.push(`/messages/${data.conversationId}`);
+    } catch {}
+    setMsgLoading(false);
   }
 
   if (loading) {
@@ -89,12 +112,6 @@ export default function UserProfilePage({ params }) {
 
   const isOwnProfile = currentUserId === userId;
 
-  const stats = [
-    { label: "Videos",    value: profile.videosCount },
-    { label: "Followers", value: followersCount },
-    { label: "Following", value: profile.followingCount },
-  ];
-
   return (
     <div className="mx-auto max-w-5xl px-4 py-10">
       {/* Profile header */}
@@ -108,7 +125,11 @@ export default function UserProfilePage({ params }) {
           <h1 className="text-2xl font-black">{profile.username || "Chanfle User"}</h1>
 
           <div className="mt-4 flex flex-wrap gap-8 justify-center sm:justify-start">
-            {stats.map((s) => (
+            {[
+              { label: "Videos",    value: profile.videosCount },
+              { label: "Followers", value: followersCount },
+              { label: "Following", value: profile.followingCount },
+            ].map((s) => (
               <div key={s.label} className="text-center">
                 <div className="text-xl font-black">{s.value.toLocaleString()}</div>
                 <div className="text-xs text-[#6b6b80] mt-0.5">{s.label}</div>
@@ -118,7 +139,7 @@ export default function UserProfilePage({ params }) {
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3">
+        <div className="flex gap-2 flex-wrap justify-center">
           {isOwnProfile ? (
             <Link
               href="/profile"
@@ -127,17 +148,33 @@ export default function UserProfilePage({ params }) {
               Edit profile
             </Link>
           ) : isSignedIn ? (
-            <button
-              onClick={handleFollow}
-              disabled={followLoading}
-              className={`rounded-full px-6 py-2 text-sm font-bold transition-all disabled:opacity-60 ${
-                following
-                  ? "border border-[#2a2a3a] text-[#f0f0f5] hover:border-red-500 hover:text-red-400"
-                  : "bg-[#ff3b5c] text-white hover:bg-[#e0304f]"
-              }`}
-            >
-              {followLoading ? "..." : following ? "Following" : "Follow"}
-            </button>
+            <>
+              <button
+                onClick={handleFollow}
+                disabled={followLoading}
+                className={`rounded-full px-6 py-2 text-sm font-bold transition-all disabled:opacity-60 ${
+                  following
+                    ? "border border-[#2a2a3a] text-[#f0f0f5] hover:border-red-500 hover:text-red-400"
+                    : "bg-[#ff3b5c] text-white hover:bg-[#e0304f]"
+                }`}
+              >
+                {followLoading ? "..." : following ? "Following" : "Follow"}
+              </button>
+
+              {isMutualFollow ? (
+                <button
+                  onClick={handleMessage}
+                  disabled={msgLoading}
+                  className="rounded-full border border-[#2a2a3a] px-5 py-2 text-sm font-semibold text-[#f0f0f5] hover:border-[#ff3b5c] hover:text-[#ff3b5c] transition-colors flex items-center gap-2 disabled:opacity-60"
+                >
+                  <span>💬</span> {msgLoading ? "..." : "Message"}
+                </button>
+              ) : following ? (
+                <div className="rounded-full border border-[#2a2a3a] px-5 py-2 text-xs text-[#6b6b80] flex items-center gap-1.5">
+                  💬 <span>Follow each other to chat</span>
+                </div>
+              ) : null}
+            </>
           ) : (
             <Link
               href="/sign-in"
@@ -162,11 +199,7 @@ export default function UserProfilePage({ params }) {
             {videos.map((video) => (
               <Link key={video.id} href={`/video/${video.id}`} className="group block">
                 <div className="relative aspect-video overflow-hidden rounded-xl bg-[#1a1a24]">
-                  {video.thumbnailUrl ? (
-                    <img src={video.thumbnailUrl} alt={video.title} className="h-full w-full object-cover group-hover:scale-105 transition-transform" />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-4xl">🎬</div>
-                  )}
+                  <img src={video.thumbnailUrl} alt={video.title} className="h-full w-full object-cover group-hover:scale-105 transition-transform" />
                   <span className="absolute bottom-2 right-2 rounded-md bg-black/80 px-1.5 py-0.5 text-xs font-mono text-white">
                     {video.duration}
                   </span>

@@ -49,6 +49,13 @@ export default function Navbar() {
                   <span>＋</span> Upload
                 </Link>
                 <Link
+                  href="/messages"
+                  title="Messages"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-[#6b6b80] hover:bg-[#1a1a24] hover:text-[#f0f0f5] transition-colors text-lg"
+                >
+                  💬
+                </Link>
+                <Link
                   href="/profile"
                   className="hidden sm:block text-sm text-[#6b6b80] hover:text-[#f0f0f5] transition-colors"
                 >
@@ -57,6 +64,7 @@ export default function Navbar() {
                 <UserButton afterSignOutUrl="/">
                   <UserButton.MenuItems>
                     <UserButton.Link label="My Videos" labelIcon={<span>🎬</span>} href="/profile" />
+                    <UserButton.Link label="Messages" labelIcon={<span>💬</span>} href="/messages" />
                   </UserButton.MenuItems>
                 </UserButton>
               </>
