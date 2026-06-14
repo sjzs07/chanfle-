@@ -40,6 +40,7 @@ export default function SignInPage() {
             },
             socialButtonsBlockButtonText: { color: "#f0f0f5" },
             socialButtonsBlockButtonArrow: { color: "#f0f0f5" },
+            providerIcon__apple: { filter: "brightness(0) invert(1)" },
             dividerLine: { backgroundColor: "#2a2a3a" },
             dividerText: { color: "#6b6b80" },
             formFieldLabel: { color: "#f0f0f5" },
