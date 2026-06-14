@@ -49,10 +49,11 @@ export default function UploadPage() {
       form.append("description", description);
       form.append("tags", tags);
       const res = await fetch("/api/upload", { method: "POST", body: form });
-      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
       router.push("/");
-    } catch {
-      setError("Upload failed. Please try again.");
+    } catch (err) {
+      setError(err.message || "Upload failed. Please try again.");
     } finally {
       setUploading(false);
     }

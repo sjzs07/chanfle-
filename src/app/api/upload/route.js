@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { v2 as cloudinary } from "cloudinary";
 import { getDb } from "@/lib/db";
 
@@ -22,7 +22,12 @@ export async function POST(request) {
     const tagsRaw = formData.get("tags") || "";
 
     if (!file || !title) {
-      return Response.json({ error: "Missing required fields" }, { status: 400 });
+      return Response.json({ error: "Missing file or title" }, { status: 400 });
+    }
+
+    // Validate Cloudinary config
+    if (!process.env.CLOUDINARY_API_KEY) {
+      return Response.json({ error: "Cloudinary not configured" }, { status: 500 });
     }
 
     const bytes = await file.arrayBuffer();
@@ -32,11 +37,7 @@ export async function POST(request) {
     const uploadResult = await new Promise((resolve, reject) => {
       cloudinary.uploader
         .upload_stream(
-          {
-            resource_type: "video",
-            folder: "chanfle",
-            transformation: [{ duration: "60" }],
-          },
+          { resource_type: "video", folder: "chanfle" },
           (err, result) => (err ? reject(err) : resolve(result))
         )
         .end(buffer);
@@ -47,7 +48,30 @@ export async function POST(request) {
       .map((t) => t.trim().toLowerCase())
       .filter(Boolean);
 
+    // Upsert user so FK constraint is satisfied
+    const user = await currentUser();
     const db = getDb();
+
+    await db.query(
+      `INSERT INTO users (id, username, email, avatar_url)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (id) DO UPDATE SET
+         username = EXCLUDED.username,
+         email    = EXCLUDED.email,
+         avatar_url = EXCLUDED.avatar_url`,
+      [
+        userId,
+        user?.username || user?.firstName || "user",
+        user?.emailAddresses?.[0]?.emailAddress || "",
+        user?.imageUrl || "",
+      ]
+    );
+
+    // Insert video
+    const thumbnailUrl = uploadResult.secure_url
+      .replace("/upload/", "/upload/so_0,f_jpg/")
+      .replace(/\.[^/.]+$/, ".jpg");
+
     await db.query(
       `INSERT INTO videos (id, user_id, title, description, tags, video_url, thumbnail_url, duration, views, likes)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, 0)`,
@@ -58,14 +82,17 @@ export async function POST(request) {
         description,
         tags,
         uploadResult.secure_url,
-        uploadResult.secure_url.replace("/upload/", "/upload/so_0/").replace(".mp4", ".jpg"),
-        Math.ceil(uploadResult.duration),
+        thumbnailUrl,
+        Math.ceil(uploadResult.duration || 0),
       ]
     );
 
     return Response.json({ success: true, videoId: uploadResult.public_id });
   } catch (err) {
     console.error("Upload error:", err);
-    return Response.json({ error: "Upload failed" }, { status: 500 });
+    return Response.json(
+      { error: err?.message || "Upload failed" },
+      { status: 500 }
+    );
   }
 }
