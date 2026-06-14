@@ -5,7 +5,7 @@ import { useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 
 export default function UploadPage() {
-  const { isSignedIn, user } = useUser();
+  const { isSignedIn } = useUser();
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -13,6 +13,7 @@ export default function UploadPage() {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
 
   function handleFile(e) {
@@ -22,7 +23,6 @@ export default function UploadPage() {
       setError("Please select a video file.");
       return;
     }
-    // Check duration client-side
     const url = URL.createObjectURL(f);
     const vid = document.createElement("video");
     vid.src = url;
@@ -42,20 +42,65 @@ export default function UploadPage() {
     e.preventDefault();
     if (!file || !title.trim()) return;
     setUploading(true);
+    setError("");
+
     try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("title", title);
-      form.append("description", description);
-      form.append("tags", tags);
-      const res = await fetch("/api/upload", { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Upload failed");
+      // Step 1 — get a signed upload URL from our API
+      setProgress("Preparing upload...");
+      const sigRes = await fetch("/api/upload/sign");
+      if (!sigRes.ok) throw new Error("Could not get upload credentials");
+      const { timestamp, signature, cloudName, apiKey } = await sigRes.json();
+
+      // Step 2 — upload directly from the browser to Cloudinary (no Next.js proxy)
+      setProgress("Uploading to Cloudinary...");
+      const cloudForm = new FormData();
+      cloudForm.append("file", file);
+      cloudForm.append("timestamp", timestamp);
+      cloudForm.append("signature", signature);
+      cloudForm.append("api_key", apiKey);
+      cloudForm.append("folder", "chanfle");
+      cloudForm.append("resource_type", "video");
+
+      const cloudRes = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`,
+        { method: "POST", body: cloudForm }
+      );
+      const uploadResult = await cloudRes.json();
+      if (uploadResult.error) throw new Error(uploadResult.error.message);
+
+      // Step 3 — save metadata to our DB
+      setProgress("Saving video...");
+      const tagList = tags
+        .split(",")
+        .map((t) => t.trim().toLowerCase())
+        .filter(Boolean);
+
+      const thumbnailUrl = uploadResult.secure_url
+        .replace("/upload/", "/upload/so_0,f_jpg/")
+        .replace(/\.[^/.]+$/, ".jpg");
+
+      const saveRes = await fetch("/api/upload/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          publicId: uploadResult.public_id,
+          videoUrl: uploadResult.secure_url,
+          thumbnailUrl,
+          duration: uploadResult.duration,
+          title,
+          description,
+          tags: tagList,
+        }),
+      });
+      const saveData = await saveRes.json();
+      if (!saveRes.ok) throw new Error(saveData.error || "Failed to save video");
+
       router.push("/");
     } catch (err) {
       setError(err.message || "Upload failed. Please try again.");
     } finally {
       setUploading(false);
+      setProgress("");
     }
   }
 
@@ -64,7 +109,10 @@ export default function UploadPage() {
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
         <div className="text-6xl">🔒</div>
         <h1 className="text-2xl font-bold">You need to be logged in</h1>
-        <a href="/sign-in" className="rounded-full bg-[#ff3b5c] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#e0304f] transition-colors">
+        <a
+          href="/sign-in"
+          className="rounded-full bg-[#ff3b5c] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#e0304f] transition-colors"
+        >
           Log in
         </a>
       </div>
@@ -158,7 +206,7 @@ export default function UploadPage() {
           disabled={!file || !title.trim() || uploading}
           className="w-full rounded-full bg-[#ff3b5c] py-3 text-sm font-bold text-white hover:bg-[#e0304f] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
-          {uploading ? "Uploading... 🚀" : "Upload Video 🎬"}
+          {uploading ? `${progress} 🚀` : "Upload Video 🎬"}
         </button>
       </form>
     </div>
