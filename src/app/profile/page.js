@@ -95,7 +95,7 @@ export default function ProfilePage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {myVideos.map((video) => (
-              <Link key={video.id} href={`/video/${encodeURIComponent(video.id)}`} className="group block">
+              <Link key={video.id} href={`/video/${video.id}`} className="group block">
                 <div className="relative aspect-video overflow-hidden rounded-xl bg-[#1a1a24]">
                   {video.thumbnailUrl ? (
                     <img src={video.thumbnailUrl} alt={video.title} className="h-full w-full object-cover group-hover:scale-105 transition-transform" />

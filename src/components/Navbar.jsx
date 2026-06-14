@@ -54,7 +54,11 @@ export default function Navbar() {
                 >
                   Profile
                 </Link>
-                <UserButton afterSignOutUrl="/" />
+                <UserButton afterSignOutUrl="/">
+                  <UserButton.MenuItems>
+                    <UserButton.Link label="My Videos" labelIcon={<span>🎬</span>} href="/profile" />
+                  </UserButton.MenuItems>
+                </UserButton>
               </>
             ) : (
               <>

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 
 const categories = [
@@ -18,6 +19,7 @@ export default function Sidebar({ isOpen, onClose }) {
   const searchParams = useSearchParams();
   const activeCat = searchParams.get("cat") || "";
   const inputRef = useRef(null);
+  const { isSignedIn } = useAuth();
 
   // Focus search on open
   useEffect(() => {
@@ -109,9 +111,20 @@ export default function Sidebar({ isOpen, onClose }) {
 
         {/* Bottom links */}
         <div className="px-5 py-5 border-t border-[#2a2a3a] flex flex-col gap-3">
-          <Link href="/upload" onClick={onClose} className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-[#ff3b5c] border border-[#ff3b5c]/30 hover:bg-[#ff3b5c]/10 transition-colors">
-            <span className="text-lg">📹</span> Upload a video
-          </Link>
+          {isSignedIn ? (
+            <>
+              <Link href="/profile" onClick={onClose} className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-[#f0f0f5] hover:bg-[#1a1a24] transition-colors">
+                <span className="text-lg">🎬</span> My Videos
+              </Link>
+              <Link href="/upload" onClick={onClose} className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-[#ff3b5c] border border-[#ff3b5c]/30 hover:bg-[#ff3b5c]/10 transition-colors">
+                <span className="text-lg">📹</span> Upload a video
+              </Link>
+            </>
+          ) : (
+            <Link href="/sign-in" onClick={onClose} className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-[#f0f0f5] border border-[#2a2a3a] hover:border-[#ff3b5c] transition-colors">
+              <span className="text-lg">👤</span> Log in
+            </Link>
+          )}
         </div>
       </aside>
     </>
