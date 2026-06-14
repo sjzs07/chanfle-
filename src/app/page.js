@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 import VideoCard from "@/components/VideoCard";
-import { mockVideos } from "@/lib/mockData";
+import Link from "next/link";
+import { formatViews, timeAgo } from "@/lib/mockData";
 
 const categoryMap = {
   "":          [],
@@ -23,7 +25,7 @@ const categoryLabels = {
   "fails":     "🎬 Fails",
 };
 
-function normalizeDbVideo(v) {
+function normalizeVideo(v) {
   return {
     id: v.id,
     title: v.title,
@@ -35,6 +37,7 @@ function normalizeDbVideo(v) {
     likes: v.likes || 0,
     tags: v.tags || [],
     author: {
+      id: v.authorId || null,
       name: v.authorName || "Chanfle User",
       avatarUrl: v.authorAvatar || `https://api.dicebear.com/9.x/avataaars/svg?seed=${v.id}`,
     },
@@ -42,17 +45,68 @@ function normalizeDbVideo(v) {
   };
 }
 
-function VideoFeed({ dbVideos, loading }) {
+function VideoFeed({ forYouVideos, followingVideos, loadingForYou, loadingFollowing }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const { isSignedIn } = useAuth();
+
+  const tab = searchParams.get("tab") || "foryou";
   const cat = searchParams.get("cat") || "";
 
-  const allVideos = [...dbVideos, ...mockVideos];
+  function setTab(t) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", t);
+    params.delete("cat");
+    router.push(`/?${params.toString()}`);
+  }
+
   const tags = categoryMap[cat] ?? [];
-  const filtered = tags.length === 0 ? allVideos : allVideos.filter((v) => v.tags.some((t) => tags.includes(t)));
-  const label = categoryLabels[cat] ?? "🔥 Trending";
+  const filtered =
+    tab === "following"
+      ? followingVideos
+      : tags.length === 0
+        ? forYouVideos
+        : forYouVideos.filter((v) => v.tags.some((t) => tags.includes(t)));
+
+  const label = tab === "following" ? "👥 Following" : (categoryLabels[cat] ?? "🔥 Trending");
+  const loading = tab === "following" ? loadingFollowing : loadingForYou;
 
   return (
     <>
+      {/* Tabs */}
+      <div className="mb-8 flex items-center gap-1 border-b border-[#2a2a3a]">
+        <button
+          onClick={() => setTab("foryou")}
+          className={`px-5 py-3 text-sm font-bold transition-colors border-b-2 -mb-px ${
+            tab !== "following"
+              ? "border-[#ff3b5c] text-[#f0f0f5]"
+              : "border-transparent text-[#6b6b80] hover:text-[#f0f0f5]"
+          }`}
+        >
+          For You
+        </button>
+        {isSignedIn ? (
+          <button
+            onClick={() => setTab("following")}
+            className={`px-5 py-3 text-sm font-bold transition-colors border-b-2 -mb-px ${
+              tab === "following"
+                ? "border-[#ff3b5c] text-[#f0f0f5]"
+                : "border-transparent text-[#6b6b80] hover:text-[#f0f0f5]"
+            }`}
+          >
+            Following
+          </button>
+        ) : (
+          <Link
+            href="/sign-in"
+            className="px-5 py-3 text-sm font-bold text-[#6b6b80] hover:text-[#f0f0f5] transition-colors border-b-2 border-transparent -mb-px"
+          >
+            Following
+          </Link>
+        )}
+      </div>
+
+      {/* Section header */}
       <div id="feed" className="mb-6 flex items-center justify-between">
         <h2 className="text-xl font-bold text-[#f0f0f5]">{label}</h2>
         <span className="text-sm text-[#6b6b80]">
@@ -60,6 +114,7 @@ function VideoFeed({ dbVideos, loading }) {
         </span>
       </div>
 
+      {/* Grid */}
       {loading ? (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {[...Array(8)].map((_, i) => (
@@ -75,19 +130,38 @@ function VideoFeed({ dbVideos, loading }) {
             </div>
           ))}
         </div>
-      ) : filtered.length > 0 ? (
+      ) : tab === "following" && !isSignedIn ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <div className="text-6xl">👥</div>
+          <p className="text-[#6b6b80]">Log in to see videos from people you follow.</p>
+          <Link href="/sign-in" className="rounded-full bg-[#ff3b5c] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#e0304f] transition-colors">
+            Log in
+          </Link>
+        </div>
+      ) : tab === "following" && filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <div className="text-6xl">👀</div>
+          <p className="text-[#6b6b80]">Follow some creators to see their videos here.</p>
+          <button
+            onClick={() => setTab("foryou")}
+            className="rounded-full border border-[#2a2a3a] px-6 py-2.5 text-sm font-bold text-[#f0f0f5] hover:border-[#ff3b5c] transition-colors"
+          >
+            Discover creators
+          </button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <div className="text-6xl">😅</div>
+          <p className="text-[#6b6b80]">No videos in this category yet.</p>
+          <a href="/upload" className="rounded-full bg-[#ff3b5c] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#e0304f] transition-colors">
+            Upload the first one
+          </a>
+        </div>
+      ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((video) => (
             <VideoCard key={video.id} video={video} />
           ))}
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-20 gap-4">
-          <div className="text-6xl">😅</div>
-          <p className="text-[#6b6b80]">No videos in this category yet. Be the first to upload one!</p>
-          <a href="/upload" className="rounded-full bg-[#ff3b5c] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#e0304f] transition-colors">
-            Upload a video
-          </a>
         </div>
       )}
 
@@ -103,25 +177,38 @@ function VideoFeed({ dbVideos, loading }) {
 }
 
 export default function HomePage() {
-  const [dbVideos, setDbVideos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { isSignedIn } = useAuth();
+  const [forYouVideos, setForYouVideos] = useState([]);
+  const [followingVideos, setFollowingVideos] = useState([]);
+  const [loadingForYou, setLoadingForYou] = useState(true);
+  const [loadingFollowing, setLoadingFollowing] = useState(false);
 
   useEffect(() => {
     fetch("/api/videos")
       .then((r) => r.json())
-      .then((data) => setDbVideos((data.videos || []).map(normalizeDbVideo)))
+      .then((data) => setForYouVideos((data.videos || []).map(normalizeVideo)))
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => setLoadingForYou(false));
   }, []);
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+    setLoadingFollowing(true);
+    fetch("/api/videos/following")
+      .then((r) => r.json())
+      .then((data) => setFollowingVideos((data.videos || []).map(normalizeVideo)))
+      .catch(() => {})
+      .finally(() => setLoadingFollowing(false));
+  }, [isSignedIn]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
-      {/* Hero Banner */}
+      {/* Hero */}
       <div className="relative mb-10 px-2 py-10">
         <div className="relative">
           <div className="flex items-center gap-2 mb-3">
             <span className="rounded-full bg-[#ff3b5c]/20 px-3 py-1 text-xs font-bold text-[#ff3b5c] pulse-glow">
-              😂 LIVE · 8,421 laughing now
+              😂 LIVE · {(forYouVideos.length * 137 + 1209).toLocaleString()} laughing now
             </span>
           </div>
           <h1 className="text-4xl sm:text-5xl font-black leading-tight">
@@ -141,7 +228,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Video Feed — Suspense needed because VideoFeed uses useSearchParams */}
+      {/* Feed with tabs */}
       <Suspense
         fallback={
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -153,24 +240,31 @@ export default function HomePage() {
           </div>
         }
       >
-        <VideoFeed dbVideos={dbVideos} loading={loading} />
+        <VideoFeed
+          forYouVideos={forYouVideos}
+          followingVideos={followingVideos}
+          loadingForYou={loadingForYou}
+          loadingFollowing={loadingFollowing}
+        />
       </Suspense>
 
-      {/* Stats strip */}
-      <div className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { label: "Videos",          value: "12,841", icon: "🎬" },
-          { label: "Laughs delivered", value: "98M+",   icon: "😂" },
-          { label: "Creators",         value: "3,200+", icon: "🎤" },
-          { label: "Countries",        value: "147",    icon: "🌍" },
-        ].map((stat) => (
-          <div key={stat.label} className="rounded-xl border border-[#2a2a3a] bg-[#1a1a24] p-5 text-center">
-            <div className="text-3xl mb-1">{stat.icon}</div>
-            <div className="text-2xl font-black gradient-text">{stat.value}</div>
-            <div className="text-xs text-[#6b6b80] mt-0.5">{stat.label}</div>
-          </div>
-        ))}
-      </div>
+      {/* Real stats */}
+      {!loadingForYou && (
+        <div className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { label: "Videos",           value: forYouVideos.length.toLocaleString(),                           icon: "🎬" },
+            { label: "Total views",      value: formatViews(forYouVideos.reduce((a, v) => a + v.views, 0)),     icon: "👁️" },
+            { label: "Total likes",      value: formatViews(forYouVideos.reduce((a, v) => a + v.likes, 0)),     icon: "❤️" },
+            { label: "Creators",         value: new Set(forYouVideos.map((v) => v.author.id).filter(Boolean)).size.toLocaleString(), icon: "🎤" },
+          ].map((stat) => (
+            <div key={stat.label} className="rounded-xl border border-[#2a2a3a] bg-[#1a1a24] p-5 text-center">
+              <div className="text-3xl mb-1">{stat.icon}</div>
+              <div className="text-2xl font-black gradient-text">{stat.value}</div>
+              <div className="text-xs text-[#6b6b80] mt-0.5">{stat.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

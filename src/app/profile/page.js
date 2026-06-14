@@ -8,16 +8,22 @@ import Link from "next/link";
 export default function ProfilePage() {
   const { isSignedIn, user } = useUser();
   const [myVideos, setMyVideos] = useState([]);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!isSignedIn) return;
-    fetch("/api/videos/mine")
-      .then((r) => r.json())
-      .then((data) => setMyVideos(data.videos || []))
+    if (!isSignedIn || !user) return;
+    Promise.all([
+      fetch("/api/videos/mine").then((r) => r.json()),
+      fetch(`/api/users/${user.id}`).then((r) => r.json()),
+    ])
+      .then(([videosData, userData]) => {
+        setMyVideos(videosData.videos || []);
+        if (userData.user) setStats(userData.user);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [isSignedIn]);
+  }, [isSignedIn, user]);
 
   if (!isSignedIn) {
     return (
@@ -31,13 +37,11 @@ export default function ProfilePage() {
     );
   }
 
-  const totalViews = myVideos.reduce((a, v) => a + (v.views || 0), 0);
-  const totalLikes = myVideos.reduce((a, v) => a + (v.likes || 0), 0);
-
-  const stats = [
-    { label: "Videos",      value: myVideos.length,       icon: "🎬" },
-    { label: "Total views", value: formatViews(totalViews), icon: "👁️" },
-    { label: "Total likes", value: formatViews(totalLikes), icon: "❤️" },
+  const statCards = [
+    { label: "Videos",    value: loading ? "—" : myVideos.length,                          icon: "🎬" },
+    { label: "Followers", value: loading ? "—" : (stats?.followersCount ?? 0).toLocaleString(), icon: "👥" },
+    { label: "Following", value: loading ? "—" : (stats?.followingCount ?? 0).toLocaleString(), icon: "❤️" },
+    { label: "Views",     value: loading ? "—" : formatViews(myVideos.reduce((a, v) => a + (v.views || 0), 0)), icon: "👁️" },
   ];
 
   return (
@@ -47,15 +51,15 @@ export default function ProfilePage() {
         <img
           src={user.imageUrl}
           alt={user.fullName}
-          className="h-24 w-24 rounded-full border-4 border-[#ff3b5c] bg-[#2a2a3a]"
+          className="h-24 w-24 rounded-full border-4 border-[#ff3b5c] bg-[#2a2a3a] object-cover"
         />
-        <div className="text-center sm:text-left">
+        <div className="text-center sm:text-left flex-1">
           <h1 className="text-2xl font-black">{user.fullName || user.username}</h1>
           <p className="text-sm text-[#6b6b80] mt-0.5">{user.emailAddresses[0]?.emailAddress}</p>
           <div className="mt-4 flex flex-wrap gap-6 justify-center sm:justify-start">
-            {stats.map((s) => (
+            {statCards.map((s) => (
               <div key={s.label} className="text-center">
-                <div className="text-xl font-black">{loading ? "—" : s.value}</div>
+                <div className="text-xl font-black">{s.value}</div>
                 <div className="text-xs text-[#6b6b80] mt-0.5">{s.icon} {s.label}</div>
               </div>
             ))}
@@ -159,6 +163,7 @@ export default function ProfilePage() {
                 avatarImageActionsUpload: { color: "#ff3b5c" },
                 userPreviewMainIdentifier: { color: "#f0f0f5" },
                 userPreviewSecondaryIdentifier: { color: "#a0a0b0" },
+                providerIcon__apple: { filter: "brightness(0) invert(1)" },
               },
             }}
           />

@@ -15,7 +15,8 @@ export async function GET() {
         video_url    AS "videoUrl",
         thumbnail_url AS "thumbnailUrl",
         duration, views, likes,
-        created_at   AS "createdAt"
+        created_at   AS "createdAt",
+        user_id      AS "authorId"
        FROM videos
        WHERE user_id = $1
        ORDER BY created_at DESC`,
